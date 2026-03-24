@@ -5,8 +5,9 @@ Este projeto configura o [Pi Coding Agent](https://github.com/badlogic/pi-mono/t
 ## 🚀 Aplicativos Disponíveis
 
 ### 1. Qwen Edition
-Ambiente focado no ecossistema Qwen com suporte a OAuth.
+Ambiente focado no ecossistema Qwen com o `pi-agent` usando OAuth do Qwen.
 - **Diretório local**: `.pi/qwen`
+- Ao iniciar, valida a credencial OAuth local e abre o fluxo de login se necessário.
 - **Execução**:
   ```bash
   nix run .#qwen
@@ -33,7 +34,8 @@ Executa o agente original sem wrappers de isolamento de diretório.
 - **Nix** com suporte a flakes.
 
 ## ⌨️ Comandos Úteis
-- `/login`: Inicia OAuth (no app Qwen).
+- `--login` ou `--reauth`: Força nova autenticação do Qwen no início da sessão.
+- `--logout`: Remove apenas `.pi/qwen/agent/auth.json` e inicia novo OAuth.
 - `/model <id>`: Troca o modelo.
 - `/list-models`: Lista modelos disponíveis.
 - `Ctrl+P`: Alterna entre modelos.

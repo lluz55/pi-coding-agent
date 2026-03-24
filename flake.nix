@@ -10,49 +10,63 @@
     flake-utils.lib.eachDefaultSystem (system:
       let
         pkgs = nixpkgs.legacyPackages.${system};
+        repoRoot = builtins.toString ./.;
       in
       {
         packages = {
           # 1. Qwen Specific Wrapper
           qwen = pkgs.writeShellScriptBin "pi-qwen" ''
             #!/usr/bin/env bash
-            export PI_HOME="$PWD/.pi/qwen"
-            export PI_CODING_AGENT_DIR="$PI_HOME/agent"
+            export PI_PROJECT_ROOT="$(pwd)/.pi/qwen"
+            export HOME="$PI_PROJECT_ROOT"
+            export PI_CODING_AGENT_DIR="$HOME/agent"
+            export PATH="${pkgs.nodejs}/bin:$PATH"
+
             mkdir -p "$PI_CODING_AGENT_DIR"
-            
-            # Logout/Reset Logic
+
             CLEAN_ARGS=()
+            QWEN_LOGOUT=0
+            QWEN_REAUTH=0
             for arg in "$@"; do
               if [[ "$arg" == "--logout" ]] || [[ "$arg" == "--reset" ]]; then
-                echo "Clearing Qwen credentials..."
-                rm -f "$PI_CODING_AGENT_DIR/auth.json"
+                QWEN_LOGOUT=1
+              elif [[ "$arg" == "--login" ]] || [[ "$arg" == "--reauth" ]]; then
+                QWEN_REAUTH=1
               else
                 CLEAN_ARGS+=("$arg")
               fi
             done
 
-            if [ ! -f "$PI_CODING_AGENT_DIR/settings.json" ]; then
-              echo '{"packages": ["npm:pi-qwen-provider"], "defaultProvider": "qwen"}' > "$PI_CODING_AGENT_DIR/settings.json"
+            mkdir -p "$PI_PROJECT_ROOT"
+            mkdir -p "$PI_CODING_AGENT_DIR"
+            echo '{"defaultProvider":"qwen-cli"}' > "$PI_CODING_AGENT_DIR/settings.json"
+
+            AUTH_HELPER="${repoRoot}/extensions/qwen-cli/oauth.mjs"
+            if [[ ! -f "$AUTH_HELPER" ]]; then
+              echo "Qwen auth helper not found: $AUTH_HELPER" >&2
+              exit 1
             fi
 
-            export PATH="${pkgs.nodejs}/bin:$PATH"
-            
-            if [ ! -d "$PI_HOME/extensions/node_modules/pi-qwen-provider" ]; then
-              echo "Installing Qwen provider..."
-              npx --yes @mariozechner/pi-coding-agent install --local npm:pi-qwen-provider
+            AUTH_ARGS=(--auth-file "$PI_CODING_AGENT_DIR/auth.json")
+            if [[ "$QWEN_LOGOUT" -eq 1 ]]; then
+              AUTH_ARGS+=(--logout)
+            fi
+            if [[ "$QWEN_REAUTH" -eq 1 ]]; then
+              AUTH_ARGS+=(--reauth)
             fi
 
-            echo "Starting Pi Agent (Qwen Edition)..."
-            echo "Tip: If you get 401/Expired error, run with '--logout' to reset."
-            
-            npx --yes @mariozechner/pi-coding-agent "''${CLEAN_ARGS[@]}"
+            node "$AUTH_HELPER" ''${AUTH_ARGS[@]} || exit 1
+
+            echo "Starting Pi Agent (Qwen OAuth - TOTAL ISOLATION)..."
+            npx --yes @mariozechner/pi-coding-agent --no-extensions -e "${repoRoot}/extensions/qwen-cli" ''${CLEAN_ARGS[@]}
           '';
 
           # 2. Z.ai Specific Wrapper
           zai = pkgs.writeShellScriptBin "pi-zai" ''
             #!/usr/bin/env bash
-            export PI_HOME="$PWD/.pi/zai"
-            export PI_CODING_AGENT_DIR="$PI_HOME/agent"
+            export PI_PROJECT_ROOT="$(pwd)/.pi/zai"
+            export HOME="$PI_PROJECT_ROOT"
+            export PI_CODING_AGENT_DIR="$HOME/agent"
             mkdir -p "$PI_CODING_AGENT_DIR"
 
             # Handle Arguments
@@ -63,7 +77,8 @@
                 --zai_token) ZAI_TOKEN_VAL="$2"; shift 2 ;;
                 --logout|--reset) 
                   echo "Clearing Z.ai credentials..."
-                  rm -f "$PI_CODING_AGENT_DIR/auth.json"
+                  rm -rf "$PI_PROJECT_ROOT/agent"
+                  mkdir -p "$PI_CODING_AGENT_DIR"
                   shift 
                   ;;
                 *) CLEAN_ARGS+=("$1"); shift ;;
@@ -90,7 +105,7 @@
             fi
 
             export PATH="${pkgs.nodejs}/bin:$PATH"
-            echo "Starting Pi Agent (Z.ai Edition)..."
+            echo "Starting Pi Agent (Z.ai - TOTAL ISOLATION)..."
             npx --yes @mariozechner/pi-coding-agent "''${CLEAN_ARGS[@]}"
           '';
 
