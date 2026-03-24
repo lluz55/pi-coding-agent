@@ -20,6 +20,17 @@
             export PI_CODING_AGENT_DIR="$PI_HOME/agent"
             mkdir -p "$PI_CODING_AGENT_DIR"
             
+            # Logout/Reset Logic
+            CLEAN_ARGS=()
+            for arg in "$@"; do
+              if [[ "$arg" == "--logout" ]] || [[ "$arg" == "--reset" ]]; then
+                echo "Clearing Qwen credentials..."
+                rm -f "$PI_CODING_AGENT_DIR/auth.json"
+              else
+                CLEAN_ARGS+=("$arg")
+              fi
+            done
+
             if [ ! -f "$PI_CODING_AGENT_DIR/settings.json" ]; then
               echo '{"packages": ["npm:pi-qwen-provider"], "defaultProvider": "qwen"}' > "$PI_CODING_AGENT_DIR/settings.json"
             fi
@@ -32,7 +43,9 @@
             fi
 
             echo "Starting Pi Agent (Qwen Edition)..."
-            exec npx --yes @mariozechner/pi-coding-agent "$@"
+            echo "Tip: If you get 401/Expired error, run with '--logout' to reset."
+            
+            npx --yes @mariozechner/pi-coding-agent "''${CLEAN_ARGS[@]}"
           '';
 
           # 2. Z.ai Specific Wrapper
@@ -42,12 +55,17 @@
             export PI_CODING_AGENT_DIR="$PI_HOME/agent"
             mkdir -p "$PI_CODING_AGENT_DIR"
 
-            # Handle Token Argument/Env
+            # Handle Arguments
             ZAI_TOKEN_VAL="$ZAI_TOKEN"
             CLEAN_ARGS=()
             while [[ $# -gt 0 ]]; do
               case $1 in
                 --zai_token) ZAI_TOKEN_VAL="$2"; shift 2 ;;
+                --logout|--reset) 
+                  echo "Clearing Z.ai credentials..."
+                  rm -f "$PI_CODING_AGENT_DIR/auth.json"
+                  shift 
+                  ;;
                 *) CLEAN_ARGS+=("$1"); shift ;;
               esac
             done
@@ -62,11 +80,8 @@
               fi
               echo "Z.ai token saved locally."
             else
-              # Check if token is already saved
               if [ -f "$PI_CODING_AGENT_DIR/auth.json" ] && ${pkgs.jq}/bin/jq -e '.zai' "$PI_CODING_AGENT_DIR/auth.json" >/dev/null 2>&1; then
                 echo "Using previously saved Z.ai token."
-              else
-                echo "Warning: No Z.ai token provided and none found in .pi/zai/agent/auth.json"
               fi
             fi
 
@@ -76,7 +91,7 @@
 
             export PATH="${pkgs.nodejs}/bin:$PATH"
             echo "Starting Pi Agent (Z.ai Edition)..."
-            exec npx --yes @mariozechner/pi-coding-agent "''${CLEAN_ARGS[@]}"
+            npx --yes @mariozechner/pi-coding-agent "''${CLEAN_ARGS[@]}"
           '';
 
           # 3. Default Wrapper (Standard Pi)
